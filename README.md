@@ -10,11 +10,16 @@ from Patcher import Patcher
 class MyClass:
   def __init__(self):
     self.patcher = Patcher()
+    
+    self.patcher.on('abort', lambda msg: print(msg))
+    self.patcher.on('log', lambda log: print(log))
+  
+  def do_patch(self):
     self.patcher.patch('C:\Users\root\Documents\Patch\Patching.exe', 
                        'C:\Users\root\Documents\Patch\Patching.dif')
                        
-    self.patcher.on('abort', lambda msg: print(msg))
-    self.patcher.on('log', lambda log: print(log))
+  
+instance = MyClass()
 ````
 Or using the User Interface thats comming soon.
 
