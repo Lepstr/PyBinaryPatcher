@@ -20,6 +20,7 @@ class MyClass:
                        
   
 instance = MyClass()
+instance.do_patch()
 ````
 Or using the User Interface thats comming soon.
 
