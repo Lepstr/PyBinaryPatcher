@@ -149,3 +149,6 @@ class EventEmitter:
 
     def remove_all_listeners(self):
         self.__listening.clear()
+
+    def is_listening_on(self, name):
+        return self.__listening.first_or_none(lambda ev: ev.name == name)

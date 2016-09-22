@@ -2,6 +2,7 @@
 
 # IDA Binary/DIF Patcher Written in Python 3.5.2
 
+# NOW WORKING ON 1.1
 _VERSION = "1.0"
 
 REPLACE_OLD = (0x01 << 0)
@@ -29,114 +30,155 @@ DIF_HEADLINE = "This difference file has been created by IDA"
 # SOFTWARE.
 
 from sys import argv
-from re import split
 import os
 from time import strftime
-from struct import unpack
 from extern.Events import EventEmitter
-from io import FileIO, SEEK_CUR, SEEK_END, SEEK_SET
+from io import SEEK_END
+
+from shutil import copy
 
 
 class Patcher(EventEmitter):
-    def __init__(self, flags):
+
+    def __init__(self, flags=0):
         super().__init__(True)
-        self.__log_cache = []
-
         self.__flags = flags
-        self.__file_path_bin = ''
-        self.__file_path_dif = ''
 
-    def patch(self, path_bin='', path_dif=''):
+        self.error_message = None
+        self.__path_bin = None
+        self.__path_dif = None
+
+    def patch(self, path_bin, path_dif):
         try:
-            if path_bin is '' and path_dif is '':
-                if not len(argv) > 2:
-                    raise FileNotFoundError("Invalid number of arguments, Syntax: <file_path_bin> <file_path_dif>")
+            if path_bin is None or path_dif is None:
+                if len(argv) > 2:
+                    self.__path_bin = r''+argv[0]+''
+                    self.__path_dif = r''+argv[1]+''
                 else:
-                    self.__file_path_bin = str(r'' + argv[0][0:] + '')
-                    self.__file_path_dif = str(r'' + argv[1][0:] + '')
+                    raise Exception("There are a invalid number of arguments. Syntax: <{}> <{}>"
+                                    .format("path_bin", "path_dif"))
             else:
-                self.__file_path_bin = path_bin
-                self.__file_path_dif = path_dif
+                self.__path_bin = path_bin
+                self.__path_dif = path_dif
 
-            if self.is_patch_ready(self.__file_path_dif):
-                if self.is_patch_ready(self.__file_path_bin):
-                    file_bin = None
-                    file_target_bin = None
+            if self.is_patch_ready(self.__path_bin) and self.is_patch_ready(self.__path_dif):
+                file_target_bin = None
+                file_target_dif = open(self.__path_dif, 'r', encoding='utf8', errors='ignore')
 
-                    if self.__flags & RENAME_NEW:
-                        bin_name = self.__file_path_bin[self.__file_path_bin.rfind('\\') + 1:]
-                        new_bin_path = self.__file_path_bin.replace(bin_name,
-                                                                    bin_name + '_patched_' + strftime("%d-%m-%y"))
+                if self.__flags & RENAME_NEW:
+                    bin_name = self.__path_bin[:self.__path_bin.rfind('.')]
 
-                        for i in (i for i in range(0, 50)):
-                            if not os.path.exists(new_bin_path + '_' + str(i)):
-                                new_bin_path += ('_' + str(i))
-                                break
-                            else:
-                                continue
-                        file_target_bin = open(new_bin_path, 'wb+')
+                    bin_name_target = bin_name + '_patched_' + strftime("%y-%d-%m")
+                    bin_path_target = None
 
-                    if file_target_bin is not None:
-                        file_bin = open(self.__file_path_bin, 'rb+')
-                    else:
-                        file_bin = open(self.__file_path_bin, 'wb+')
-                        file_target_bin = file_bin
-
-                    file_dif = open(self.__file_path_dif, 'r')
-
-                    dif_hex = []
-                    with file_dif as file:
-                        if str(file_dif.readline()).strip('\t\n\r') is str(DIF_HEADLINE):
-                            self.emit('abort', "Invalid DIF-File Headline.")
+                    for i in (self.__path_bin.replace(bin_name, (bin_name_target + '_' + str(i))) for i in range(0, 50)):
+                        if not os.path.exists(i):
+                            bin_path_target = i
+                            break
                         else:
-                            # Blank Line, get that out of the way
-                            file_dif.readline()
-                            self.emit('log', 'Original DIF-Target File Name: {}'.format(file_dif.readline()))
+                            continue
 
-                            for line in file:
-                                cur_spl = split(r'[ :\n]', line)
+                    if bin_path_target is None:
+                        self.error_message = "You have too many patched Binary-Files in your Folder."
 
-                                val_off = int((cur_spl[0]).strip().encode('ascii'), 16)
-                                src_val = int((cur_spl[2]).strip().encode('ascii'), 16)
-                                new_val = int((cur_spl[3]).strip().encode('ascii'), 16)
+                        if self.is_listening_on('abort'):
+                            self.emit('abort', self.error_message)
+                            return
 
-                                print(val_off)
-                                if src_val > 0xFF and src_val != 0xFFFFFFFF or new_val > 0xFF and \
-                                    new_val is not 0xFFFFFFFF:
-                                    self.emit('abort', "Selected File is not a DIF-File.")
-                                    break
+                        raise Exception(self.error_message)
 
-                                dif_hex.append((val_off, new_val))
+                    file_target_bin = open(bin_path_target, 'wb+')
+                    copy(self.__path_bin, bin_path_target)
 
-                    file_size_bin = os.fstat(file_bin.fileno()).st_size
+                if file_target_bin is None:
+                    file_target_bin = open(self.__path_bin, 'rb+')
 
-                    for elem in dif_hex:
+                if self.error_message is not None:
+                    return
+
+                dif_offset_val = []
+                with file_target_dif as dif_file:
+
+                    if str(dif_file.readline()).strip() is str(DIF_HEADLINE):
+                        self.error_message = "Selected DIF-File is not an valid DIF-File, please check your Path."
+
+                        if self.is_listening_on('abort'):
+                            self.emit('abort', self.error_message)
+                            return
+                        raise Exception(self.error_message)
+
+                    dif_file.readline()
+                    self.emit('log', "Patching Binary-File: {0}".format(str(dif_file.readline()).strip()))
+
+                    for line in (line for line in dif_file):
+
+                        offset = int(((line.strip()[:line.rfind(':')]).strip()).encode('ascii'), 16)
+
+                        _values = ((line.strip()[line.rfind(':')+1:]).strip()).split(' ')
+                        prev_val = int(_values[0].encode('ascii'), 16)
+                        new_val = int(_values[1].encode('ascii'), 16)
+
+                        if new_val < 0 or new_val > 255 or prev_val < 0 or prev_val > 255:
+                            self.error_message = "Selected DIF-File is not an valid DIF-File, {0}".\
+                                format("values are greater then 255 or less then zero.")
+
+                            if self.is_listening_on('abort'):
+                                self.emit('abort', self.error_message)
+                                break
+                            raise Exception(self.error_message)
+
+                        dif_offset_val.append((offset, new_val))
+
+                    if self.error_message is not None:
+                        return
+
+                with file_target_bin:
+                    file_size_bin = os.fstat(file_target_bin.fileno()).st_size
+                    for elem in (el for el in dif_offset_val):
                         if elem[0] is 0xFFFFFFFF:
                             if file_size_bin > elem[0]:
                                 file_size_bin = elem[0]
                             continue
                         while elem[0] >= file_size_bin:
-                            file_bin.seek(0, SEEK_END)
-                            file_bin.write(bytes([elem[0]]))
+                            file_target_bin.seek(0, SEEK_END)
+                            file_target_bin.write(bytes([elem[0]]))
 
-                        file_bin.seek(elem[0], 0)
-                        file_bin.write(bytes([elem[1]]))
+                        file_target_bin.seek(elem[0], 0)
+                        read_byte = file_target_bin.read()[0]
 
-                    if file_target_bin is not None:
-                        file_target_bin.close()
+                        if read_byte is elem[1]:
+                            warn_msg = "Patcher wasn't able to replace byte at offset <{0}> to byte <{1}>".\
+                                format(str(elem[0]), str(elem[1]))
+                            self.emit('log', '[WARNING] {0}'.format(warn_msg))
+                        else:
+                            file_target_bin.seek(elem[0], 0)
+                            file_target_bin.write(bytes([elem[1]]))
 
-                    file_bin.close()
-                    file_dif.close()
+                            log_msg = "Changed <{0}> => <{1}> at <{2}>".\
+                                format(str(read_byte), str(elem[1]), str(elem[0]))
+                            self.emit('log', log_msg)
 
-                else:
-                    self.emit('abort', "There is no valid path to your binary file.")
+                file_target_bin.close()
+                file_target_dif.close()
+
+                if self.error_message is None:
+                    self.emit('log', "Patching Successful!")
             else:
-                self.emit('abort', "There is no valid path to your .dif file")
+                self.error_message = "One of your files is not ready to patch, {0}".\
+                    format("please check both your Binary and DIF File.")
+                if self.is_listening_on('abort'):
+                    self.emit('abort', self.error_message)
+                    return
+                raise Exception(self.error_message)
 
         except RuntimeError:
-            raise RuntimeError("Thrown Exception at 'patch(self, path_bin, path_diff) unsolved Exception.")
-        finally:
-            print("successfully")
+            self.error_message = "Wasn't able to Patch Binary with {0} -> {1}".format(path_bin, path_dif)
+
+            if self.is_listening_on('abort'):
+                self.emit('abort', self.error_message)
+                return
+
+            raise RuntimeError(self.error_message)
 
     @staticmethod
     def is_patch_ready(path):
@@ -148,4 +190,5 @@ class Patcher(EventEmitter):
             else:
                 return False
         else:
-            raise SyntaxError("Given path is not absolute.")
+            return False
+

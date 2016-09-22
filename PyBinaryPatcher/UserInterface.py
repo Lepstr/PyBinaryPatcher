@@ -29,10 +29,12 @@ import Patcher
 class UserInterface:
     def __init__(self):
         self.patcher = Patcher.Patcher(Patcher.RENAME_NEW)
+        self.patcher.on('abort', lambda ex: print(ex))
+        self.patcher.on('log', lambda log: print("[LOG] " + str(log)))
+
         self.patcher.patch(r'C:\Users\Skloa\Documents\Personal\Reverse Engineering\SemperVideoEngineeringChallange\CrackMe v2\CrackMe v2.exe',
                            r'C:\Users\Skloa\Documents\Personal\Reverse Engineering\SemperVideoEngineeringChallange\CrackMe v2\CrackMe v2.dif')
 
-        self.patcher.on('abort', lambda ex: print(ex))
 
 
 def main():
