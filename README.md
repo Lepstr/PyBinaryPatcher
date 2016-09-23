@@ -27,7 +27,6 @@ Or using the User Interface thats comming soon.
 ## Module Feature Pipeline
 - [x] Basic Patch of Binarys, get overall features working.
 - [x] Implement Event System using [Events.py](https://github.com/Lepstr/PyEvent)
-- [ ] Implement User Interface for comfortable use
 - [ ] Performance Optimizations
 
 ## License
