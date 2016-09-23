@@ -2,12 +2,9 @@
 
 # IDA Binary/DIF Patcher Written in Python 3.5.2
 
-# NOW WORKING ON 1.1
-_VERSION = "1.0"
+_VERSION = "1.2"
 
-REPLACE_OLD = (0x01 << 0)
 RENAME_NEW = (0x01 << 2)
-LOG = (0x01 << 3)
 DIF_HEADLINE = "This difference file has been created by IDA"
 
 # Copyright (c) 2016 Bastian Hoffmann
@@ -133,6 +130,7 @@ class Patcher(EventEmitter):
                         return
 
                 with file_target_bin:
+
                     file_size_bin = os.fstat(file_target_bin.fileno()).st_size
                     for elem in (el for el in dif_offset_val):
                         if elem[0] is 0xFFFFFFFF:
@@ -155,7 +153,7 @@ class Patcher(EventEmitter):
                             file_target_bin.write(bytes([elem[1]]))
 
                             log_msg = "Changed <{0}> => <{1}> at <{2}>".\
-                                format(str(read_byte), str(elem[1]), str(elem[0]))
+                                format(hex(read_byte), hex(elem[1]), hex(elem[0]))
                             self.emit('log', log_msg)
 
                 file_target_bin.close()
@@ -163,6 +161,9 @@ class Patcher(EventEmitter):
 
                 if self.error_message is None:
                     self.emit('log', "Patching Successful!")
+
+                    if len(argv) > 0:
+                        print("Patching Successful!")
             else:
                 self.error_message = "One of your files is not ready to patch, {0}".\
                     format("please check both your Binary and DIF File.")
@@ -183,7 +184,7 @@ class Patcher(EventEmitter):
     @staticmethod
     def is_patch_ready(path):
         if os.path.abspath(path):
-            ext = path[path.find('.') + 1:]
+            ext = path[path.rfind('.') + 1:]
 
             if ext is 'exe' or 'dif':
                 return True
