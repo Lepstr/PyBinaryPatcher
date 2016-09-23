@@ -52,7 +52,7 @@ class Patcher(EventEmitter):
                     self.__path_bin = r''+argv[0]+''
                     self.__path_dif = r''+argv[1]+''
                 else:
-                    raise Exception("There are a invalid number of arguments. Syntax: <{}> <{}>"
+                    raise Exception("There are a invalid number of arguments. Syntax: <{0}> <{1}>"
                                     .format("path_bin", "path_dif"))
             else:
                 self.__path_bin = path_bin
